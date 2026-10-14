@@ -1,0 +1,25 @@
+# 敏感信息（API密钥等，绝对不能上传）
+.env
+*.env
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.pyo
+
+# 虚拟环境
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# 系统文件
+Thumbs.db
+.DS_Store
+
+# 评测临时输出
+eval/*.log
+eval/results/
