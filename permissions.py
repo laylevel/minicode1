@@ -1,16 +1,8 @@
 from pathlib import Path
 import os, re, shlex
 from dataclasses import dataclass, field
-workspace_root = Path.cwd().resolve() 
-def resolve_workspace_path(path:str,workspace_root):
-    resolved_path = (workspace_root / path).resolve()
-    if not resolved_path.is_relative_to(workspace_root):
-        raise ValueError(f"Path {resolved_path} is not relative to {workspace_root}")
-    return resolved_path
 
-import os, re, shlex
-from dataclasses import dataclass, field
-from pathlib import Path
+workspace_root = Path.cwd().resolve()
 
 FILE_ACTIONS = {"read_file": "read", "write_file": "write", "edit_file": "write", "glob": "list"}
 OPERATORS = {";", "&&", "||", "|", "&"}          # 把一条命令切成几段
