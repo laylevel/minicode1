@@ -1,9 +1,10 @@
 from pathlib import Path
 import os, re, shlex
 from dataclasses import dataclass, field
-
-workspace_root = Path.cwd().resolve()
-
+workspace_root = Path.cwd().resolve() 
+import os, re, shlex1
+from dataclasses import dataclass, field
+from pathlib import Path
 FILE_ACTIONS = {"read_file": "read", "write_file": "write", "edit_file": "write", "glob": "list"}
 OPERATORS = {";", "&&", "||", "|", "&"}          # 把一条命令切成几段
 REDIRECTS = {">", ">>", "<"}                      # 后面跟的是文件路径

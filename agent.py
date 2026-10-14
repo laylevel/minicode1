@@ -31,13 +31,6 @@ TOOLS = [
 ]
 
 
-def safe_path(p: str) -> Path:
-    path = (WORKDIR / p).resolve()
-    if not path.is_relative_to(WORKDIR):
-        raise ValueError(f"Path {path} is not relative to {WORKDIR}")
-    return path
-
-
 def run_bash(command: str, timeout: int = 120) -> str:
     dangerous = ["rm -rf /", "sudo", "shutdown", "reboot", "> /dev/"]
     if any(d in command for d in dangerous):
@@ -226,7 +219,7 @@ def agent_loop(messages: list):
                 "content": output,
             })
         messages.append({"role": "user", "content": results})
-        STATS["hit_max_steps"] = True
+    STATS["hit_max_steps"] = True
 
 
 if __name__ == "__main__":
