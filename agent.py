@@ -2,16 +2,20 @@ import os
 import subprocess
 from dotenv import load_dotenv
 from anthropic import Anthropic
+from langchain.chat_models import init_chat_model
 from pathlib import Path
 import re
+from permissions import assess_file_request, prepare_request, safe_glob
 
-load_dotenv()
-client = Anthropic(
+load_dotenv(override=True)
+client = init_chat_model(
     base_url=os.getenv("ANTHROPIC_BASE_URL"),
     auth_token=os.getenv("ANTHROPIC_AUTH_TOKEN"),
+    model="deepseek:deepseek-ai/DeepSeek-R1-0528-Qwen3-8B",
 )
 
 SYSTEM = f"You are a coding agent at {os.getcwd()}. Use bash to solve tasks. Act, don't explain."
+client.invoke("SYSTEM")
 WORKDIR = Path.cwd().resolve()  # 用解析后的绝对路径，后续 is_relative_to 才可靠
 MAX_STEPS = 20
 PERMISSION_MODE = "ask"
@@ -80,90 +84,15 @@ def edit_file(path: str, old_text: str, new_text: str):
 
 
 def glob(pattern: str):
-    import glob as g
-    # 过滤掉解析后落在工作区之外的结果，防止 glob("../*") 越界
-    matches = sorted({
-        m for m in g.glob(pattern, root_dir=WORKDIR, recursive=True)
-        if (WORKDIR / m).resolve().is_relative_to(WORKDIR)
-    })
+    # 先约束搜索过程，再输出匹配项，避免先遍历工作区外再过滤结果。
+    try:
+        matches = safe_glob(pattern, WORKDIR, max_results=201)
+    except (OSError, RuntimeError, ValueError) as e:
+        return f"Error: {e}"
     shown = matches[:200]
     if len(matches) > 200:
         shown.append("... (more matches omitted; narrow the pattern)")
     return "\n".join(shown) if shown else "(no matches)"
-
-
-TOOL_HANDLERS = {
-    "bash": run_bash, "read_file": read_file, "write_file": write_file,
-    "edit_file": edit_file, "glob": glob,
-}
-
-DENY_LIST = ["rm -rf /", "sudo", "shutdown", "reboot", "> /dev/sda", "dd if="]
-
-
-def check_deny_list(command: str) -> str | None:
-    for deny in DENY_LIST:
-        if deny in command:
-            return f"Error: Dangerous command {deny} blocked."
-    return None
-
-
-DESTRUCTIVE_COMMAND_WORD = re.compile(
-    r"(?i)(?:^|[;&|()\n])\s*(?:rm|del)(?=\s|$|[;&|()])"
-)
-
-
-def contains_destructive_command(command: str) -> bool:
-    return bool(DESTRUCTIVE_COMMAND_WORD.search(command))
-
-
-PERMISSION_RULES = [
-    {
-        "tools": ["read_file", "write_file", "edit_file", "glob"],
-        "check": lambda args: not (WORKDIR / args.get("path", "")).resolve().is_relative_to(WORKDIR),
-        "message": "Access outside workspace",
-    },
-    {
-        "tools": ["bash"],
-        "check": lambda args: contains_destructive_command(args.get("command", ""))
-        or any(kw in args.get("command", "") for kw in ["rm ", "> /etc/", "chmod 777"]),
-        "message": "Dangerous command blocked.",
-    },
-]
-
-
-def check_rules(tool_name: str, args: dict) -> str | None:
-    for rule in PERMISSION_RULES:
-        if tool_name in rule["tools"] and rule["check"](args):
-            return rule["message"]
-    return None
-
-
-def ask_user(tool_name: str, args: dict, reason: str) -> str:
-    if PERMISSION_MODE == "auto_deny":
-        return "deny"
-    if PERMISSION_MODE == "auto_allow":
-        return "allow"
-    print(f"\n⚠  {reason}")
-    print(f"   Tool: {tool_name}({args})")
-    choice = input("   Allow? [y/N] ").strip().lower()
-    return "allow" if choice in ("y", "yes") else "deny"
-
-
-def check_permission(block) -> bool:
-    # 闸门 1: 硬拒绝
-    if block.name == "bash":
-        reason = check_deny_list(block.input.get("command", ""))
-        if reason:
-            print(f"\n⛔ {reason}")
-            return False
-
-    # 闸门 2 + 3: 规则匹配 → 用户审批
-    reason = check_rules(block.name, block.input)
-    if reason:
-        decision = ask_user(block.name, block.input, reason)
-        if decision == "deny":
-            return False
-    return True
 
 
 def agent_loop(messages: list):
@@ -245,3 +174,4 @@ if __name__ == "__main__":
                 if getattr(block, "type", None) == "text":
                     print(block.text)
         print()
+list = []
